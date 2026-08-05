@@ -1,4 +1,32 @@
-import heapq
+# Cria uma fila de prioridade para armazenar os vertices a serem visitados
+fila = []
+
+def adicionar_na_fila(valor, nome):
+    fila.append((valor, nome))
+
+
+def get_menor_elemento_fila_and_remove():
+    if not fila:
+        return
+
+    menor_valor = float('inf')
+    menor_nome = float('inf')
+    menor_point = float('inf')
+
+    point = 0
+    for elemento in fila:
+        valor, nome = elemento
+
+        if valor < menor_valor:
+            menor_valor = valor
+            menor_nome = nome
+            menor_point = point
+        
+        point =+ 1
+
+        fila.pop(menor_point)
+
+    return menor_valor, menor_nome
 
 # Grafo do mapa, representacao 
 
@@ -23,20 +51,17 @@ anterior = {}
 visitados = set()
 
 # Define a origem e o destino
-origem = "A"
-destino = "F"
+origem = "F"
+destino = "B"
 
 # Inicializa a distancia da origem com 0
 dist_from_origem[origem] = 0
 
-# Cria uma fila de prioridade para armazenar os vertices a serem visitados
-fila = []
-
 # Adiciona a origem na fila de prioridade
-heapq.heappush(fila, (dist_from_origem[origem], origem))
+adicionar_na_fila(dist_from_origem[origem], origem)
 
 while fila:
-    elemento_mais_perto = heapq.heappop(fila)
+    elemento_mais_perto = get_menor_elemento_fila_and_remove()
     distancia_atual = elemento_mais_perto[0]
     atual = elemento_mais_perto[1]
 
@@ -63,7 +88,7 @@ while fila:
             #aqui salvamos de onde veio para chegar na melhor distancia para ele
             anterior[vizinho_nome] = atual
 
-            heapq.heappush(fila, (nova_distancia, vizinho_nome))
+            adicionar_na_fila(nova_distancia, vizinho_nome)
 
 
 # print(dist_from_origem)
