@@ -24,7 +24,7 @@ def get_menor_elemento_fila_and_remove():
         
         point =+ 1
 
-        fila.pop(menor_point)
+    fila.pop(menor_point)
 
     return menor_valor, menor_nome
 
@@ -104,12 +104,8 @@ while atual != origem:
 if atual == origem:
     caminho.append(atual)
 
-print(caminho)
-
 size_caminho = len(caminho)
 caminho_correto = []
-
-repetir = True
 
 for ponto in caminho:
     caminho_correto.append(ponto)
