@@ -51,8 +51,8 @@ anterior = {}
 visitados = set()
 
 # Define a origem e o destino
-origem = "F"
-destino = "B"
+origem = "A"
+destino = "F"
 
 # Inicializa a distancia da origem com 0
 dist_from_origem[origem] = 0
