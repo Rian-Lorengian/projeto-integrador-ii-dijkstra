@@ -1,0 +1,1118 @@
+<!--
+  dijkstra_visual.html  —  Editor visual + passo a passo do algoritmo de Dijkstra
+
+  Feito "a partir de" dijkstra_estudo.py:
+  - a mesma ideia da fila manual (adicionar_na_fila / get_menor_elemento_fila_and_remove)
+  - dist_from_origem, anterior, visitados
+  - reconstrução do caminho do destino até a origem seguindo 'anterior'
+
+  Aqui isso vira uma tela onde você:
+    * carrega uma imagem de fundo do seu computador
+    * clica para criar pontos, arrasta os pontos, liga os pontos com um peso
+    * escolhe origem e destino clicando neles
+    * roda "de forma lenta" vendo a fila de prioridade e a linha do código em execução
+
+  Arquivo único, sem internet e sem instalação: é só abrir no navegador.
+-->
+<meta charset="utf-8">
+<title>Dijkstra — editor visual</title>
+<style>
+  :root{
+    --bg:#f1f5f9; --panel:#ffffff; --ink:#0f172a; --muted:#64748b;
+    --line:#e2e8f0; --accent:#2563eb;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{
+    font:14px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+    color:var(--ink); background:var(--bg);
+  }
+  .app{display:flex; flex-direction:column; min-height:100vh}
+
+  /* ---------- barra de ferramentas ---------- */
+  .toolbar{
+    display:flex; flex-wrap:wrap; gap:6px; align-items:center;
+    padding:8px 12px; background:var(--panel); border-bottom:1px solid var(--line);
+    position:sticky; top:0; z-index:5;
+  }
+  .toolbar .group{display:flex; gap:4px; align-items:center; padding-right:8px; margin-right:4px; border-right:1px solid var(--line)}
+  .toolbar .group:last-child{border-right:0}
+  button, .filebtn{
+    font:inherit; padding:6px 10px; border:1px solid #cbd5e1; border-radius:7px;
+    background:#fff; color:var(--ink); cursor:pointer; white-space:nowrap;
+  }
+  button:hover,.filebtn:hover{background:#f8fafc}
+  button:disabled{opacity:.4; cursor:not-allowed}
+  input:disabled{opacity:.45; cursor:not-allowed}
+  .toolbar select{font:inherit; padding:5px 6px; border:1px solid #cbd5e1; border-radius:7px; background:#fff; max-width:150px}
+  button.on{background:var(--accent); border-color:var(--accent); color:#fff}
+  button.play{background:#16a34a; border-color:#16a34a; color:#fff}
+  button.play.pause{background:#b45309; border-color:#b45309}
+  .filebtn input{display:none}
+  label.rng{display:flex; align-items:center; gap:6px; color:var(--muted)}
+  .title{font-weight:700; margin-right:6px}
+
+  /* ---------- layout central ---------- */
+  .main{display:flex; gap:12px; padding:12px; align-items:flex-start; flex-wrap:wrap}
+  .boardWrap{
+    position:relative; flex:1 1 560px; min-width:320px;
+    background:#fff; border:1px solid var(--line); border-radius:10px; overflow:hidden;
+  }
+  #board{display:block; width:100%; height:min(52vh,480px); touch-action:none; background:
+    repeating-linear-gradient(0deg,#fbfcfe,#fbfcfe 23px,#eef2f7 24px),
+    repeating-linear-gradient(90deg,#fbfcfe,#fbfcfe 23px,#eef2f7 24px)}
+  .hint{
+    position:absolute; left:10px; bottom:10px; background:rgba(15,23,42,.78); color:#fff;
+    padding:4px 9px; border-radius:6px; font-size:12px; pointer-events:none; max-width:70%;
+  }
+
+  .side{flex:0 0 340px; display:flex; flex-direction:column; gap:10px}
+  @media (max-width:900px){ .side{flex:1 1 100%} }
+  .card{background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:10px 12px}
+  .card h3{margin:0 0 6px; font-size:12px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted)}
+  .od{display:flex; gap:8px}
+  .od .pill{flex:1; border:1px solid var(--line); border-radius:8px; padding:6px 8px; text-align:center}
+  .pill b{display:block; font-size:11px; color:var(--muted); font-weight:600}
+  .pill .v{font-size:18px; font-weight:800}
+  .v.o{color:#1d4ed8} .v.d{color:#be123c}
+  #msg{min-height:34px; font-size:13px}
+  #counter{font-size:12px; color:var(--muted)}
+  #counters{font-size:12px; color:var(--muted); margin-top:3px}
+  #counters b{color:var(--ink); font-variant-numeric:tabular-nums}
+  .subnote{font-size:11px; color:var(--muted); margin:-2px 0 5px}
+  ul.fila{list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:3px; max-height:150px; overflow:auto}
+  ul.fila li{border:1px solid var(--line); border-radius:6px; padding:3px 8px; font-variant-numeric:tabular-nums}
+  ul.fila li.hl{background:#fde68a; border-color:#f59e0b; font-weight:700}
+  ul.fila li.empty{color:var(--muted); border-style:dashed; text-align:center}
+  table.dist{width:100%; border-collapse:collapse; font-variant-numeric:tabular-nums}
+  table.dist th{font-size:10px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted);
+                text-align:left; padding:2px 6px; border-bottom:1px solid var(--line)}
+  table.dist td{border-top:1px solid var(--line); padding:3px 6px}
+  table.dist td:nth-child(2){text-align:right; font-weight:700}
+  table.dist td:nth-child(3){color:var(--muted)}
+  table.dist td:nth-child(4){text-align:center; color:#15803d; font-weight:800; width:1.4em}
+  table.dist tr.cur td{background:#fef3c7}
+  table.dist tr.o td:first-child{color:#1d4ed8; font-weight:700}
+  table.dist tr.d td:first-child{color:#be123c; font-weight:700}
+  #result{font-size:14px}
+  #result .ok{color:#15803d; font-weight:700}
+  #result .no{color:#b91c1c; font-weight:700}
+  .legend{display:flex; flex-wrap:wrap; gap:8px 12px; font-size:12px; color:var(--muted)}
+  .legend span{display:flex; align-items:center; gap:5px}
+  .sw{width:14px; height:14px; border-radius:4px; border:2px solid #475569; display:inline-block}
+
+  /* ---------- painel de código ---------- */
+  .codeWrap{margin:0 12px 16px; background:#0f172a; border-radius:10px; overflow:hidden}
+  .codeWrap .cap{color:#cbd5e1; font-size:12px; padding:8px 12px; border-bottom:1px solid #1e293b}
+  pre#code{margin:0; padding:10px 0; overflow:auto; max-height:min(38vh,300px); font:13px/1.5 ui-monospace,SFMono-Regular,Consolas,monospace}
+  pre#code .cl{display:block; padding:0 12px; color:#e2e8f0; white-space:pre}
+  pre#code .cl .ln{display:inline-block; width:2.2em; color:#64748b; user-select:none}
+  pre#code .cl.hot{background:#1d4ed8; color:#fff}
+  pre#code .cl.hot .ln{color:#bfdbfe}
+
+  /* ---------- SVG ---------- */
+  .edge{stroke:#94a3b8; stroke-width:3}
+  .edge.active{stroke:#f59e0b; stroke-width:6}
+  .edge.partial{stroke:#fb923c; stroke-width:6}
+  .edge.path{stroke:#dc2626; stroke-width:6}
+  .ehit{stroke:transparent; stroke-width:18; cursor:pointer}
+  .wlabel{font:700 12px system-ui; fill:#334155; text-anchor:middle; dominant-baseline:central;
+          paint-order:stroke; stroke:#fff; stroke-width:4px; cursor:pointer}
+  .node{cursor:pointer}
+  .node circle{fill:#e2e8f0; stroke:#475569; stroke-width:2}
+  .node .nm{font:700 14px system-ui; fill:#0f172a; text-anchor:middle; dominant-baseline:central}
+  .node .dlabel{font:800 12px system-ui; fill:#1e3a8a; text-anchor:middle; dominant-baseline:central;
+                paint-order:stroke; stroke:#fff; stroke-width:4px}
+  .node.origem circle{fill:#bfdbfe; stroke:#1d4ed8; stroke-width:3}
+  .node.destino circle{fill:#fecdd3; stroke:#be123c; stroke-width:3}
+  .node.visited circle{fill:#bbf7d0; stroke:#15803d}
+  .node.current circle{fill:#fde68a; stroke:#b45309; stroke-width:4}
+  .node.updated circle{stroke:#2563eb; stroke-width:4}
+  .node.path circle{stroke:#dc2626; stroke-width:4}
+  .node.pending circle{stroke:#7c3aed; stroke-width:4; stroke-dasharray:4 3}
+  .node.tentative circle{stroke:#b45309; stroke-dasharray:3 3}
+  .node.unreached{opacity:.45}
+  .tree{fill:none; stroke:#7c3aed; stroke-width:2.5; opacity:.9}
+  .relax rect{fill:#eff6ff; stroke:#3b82f6; stroke-width:1.5}
+  .relax.ok  rect{fill:#dcfce7; stroke:#16a34a}
+  .relax.no  rect{fill:#fee2e2; stroke:#dc2626}
+  .relax text{font:700 11px system-ui; dominant-baseline:central; fill:#0f172a}
+</style>
+
+<div class="app">
+  <div class="toolbar">
+    <span class="title">Dijkstra visual</span>
+
+    <div class="group" id="modes">
+      <button data-mode="add"     class="on">➕ Ponto</button>
+      <button data-mode="move">✋ Mover</button>
+      <button data-mode="link">🔗 Ligar</button>
+      <button data-mode="origem">🅐 Origem</button>
+      <button data-mode="destino">🅕 Destino</button>
+      <button data-mode="erase">🗑 Apagar</button>
+    </div>
+
+    <div class="group">
+      <label class="filebtn">🖼 Imagem de fundo<input type="file" id="bgFile" accept="image/*"></label>
+      <button id="bgClear">sem imagem</button>
+      <button id="example">Exemplo</button>
+      <button id="clearAll">Limpar tudo</button>
+    </div>
+
+    <div class="group">
+      <label class="rng"><input type="checkbox" id="autoPeso" checked> peso pela distância</label>
+      <label class="rng">ponta a ponta =
+        <input type="number" id="pesoMax" min="1" step="1" value="100" style="width:52px">
+      </label>
+    </div>
+
+    <div class="group">
+      <button id="cfgSave">💾 Salvar</button>
+      <select id="cfgList" title="configurações salvas"><option value="">— salvas —</option></select>
+      <button id="cfgLoad">Carregar</button>
+      <button id="cfgDel">Excluir</button>
+      <button id="cfgExport">Exportar</button>
+      <label class="filebtn">Importar<input type="file" id="cfgImport" accept="application/json,.json"></label>
+    </div>
+
+    <div class="group">
+      <label class="rng"><input type="checkbox" id="showTree" checked> setas do anterior</label>
+      <label class="rng"><input type="checkbox" id="showRelax" checked> balões de cálculo</label>
+    </div>
+
+    <div class="group">
+      <button id="play" class="play">▶ Rodar</button>
+      <button id="back">◀ Voltar</button>
+      <button id="fwd">Passo ▶</button>
+      <button id="end">⚡ Resultado</button>
+      <button id="reset">↺ Reiniciar</button>
+      <label class="rng"><input type="checkbox" id="pararDestino" checked> parar no destino</label>
+      <span class="rng" id="speeds">Velocidade
+        <button data-ms="1000">1s</button>
+        <button data-ms="2000">2s</button>
+        <button data-ms="3000">3s</button>
+        <input type="number" id="msInput" min="1" step="50" value="1000" style="width:64px"
+               title="tempo de cada passo, em milissegundos"> ms
+      </span>
+    </div>
+  </div>
+
+  <div class="main">
+    <div class="boardWrap">
+      <svg id="board" xmlns="http://www.w3.org/2000/svg"></svg>
+      <div class="hint" id="hint"></div>
+    </div>
+
+    <div class="side">
+      <div class="card">
+        <h3>Origem / Destino</h3>
+        <div class="od">
+          <div class="pill"><b>ORIGEM</b><span class="v o" id="oVal">—</span></div>
+          <div class="pill"><b>DESTINO</b><span class="v d" id="dVal">—</span></div>
+        </div>
+        <div id="msg"></div>
+        <div id="counter"></div>
+        <div id="counters"></div>
+      </div>
+
+      <div class="card">
+        <h3>Fila de prioridade (fila)</h3>
+        <div class="subnote">menor valor no topo — é o que a fila de prioridade entrega primeiro</div>
+        <ul class="fila" id="fila"><li class="empty">— rode o algoritmo —</li></ul>
+      </div>
+
+      <div class="card">
+        <h3>dist_from_origem</h3>
+        <div class="subnote">distância da origem até cada ponto · "veio de" = anterior · ✓ = já finalizado</div>
+        <table class="dist" id="dist"><tr><td style="color:var(--muted)">—</td></tr></table>
+      </div>
+
+      <div class="card">
+        <h3>Resultado</h3>
+        <div id="result">Defina origem e destino e clique em <b>Rodar</b>.</div>
+      </div>
+
+      <div class="card">
+        <h3>Legenda</h3>
+        <div class="legend">
+          <span><i class="sw" style="background:#bfdbfe;border-color:#1d4ed8"></i>origem</span>
+          <span><i class="sw" style="background:#fecdd3;border-color:#be123c"></i>destino</span>
+          <span><i class="sw" style="background:#fde68a;border-color:#b45309"></i>nó atual</span>
+          <span><i class="sw" style="background:#bbf7d0;border-color:#15803d"></i>visitado (final)</span>
+          <span><i class="sw" style="background:#fff;border-color:#b45309;border-style:dashed"></i>tentativo (na fila)</span>
+          <span><i class="sw" style="background:#fff;border-color:#2563eb"></i>atualizado agora</span>
+          <span><i class="sw" style="background:#fff;border-color:#dc2626"></i>caminho final</span>
+          <span><i class="sw" style="background:#7c3aed;border-color:#7c3aed"></i>seta → anterior</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="codeWrap">
+    <div class="cap">baseado no dijkstra_estudo.py — a linha destacada é a que está executando agora</div>
+    <pre id="code"></pre>
+  </div>
+</div>
+
+<script>
+"use strict";
+
+/* ====================== código mostrado no painel ====================== */
+const CODE = [
+/* 1*/ "fila = []",
+/* 2*/ "",
+/* 3*/ "def adicionar_na_fila(valor, nome):",
+/* 4*/ "    fila.append((valor, nome))",
+/* 5*/ "",
+/* 6*/ "def get_menor_elemento_fila_and_remove():",
+/* 7*/ "    menor_valor = inf",
+/* 8*/ "    for i, (valor, nome) in enumerate(fila):",
+/* 9*/ "        if valor < menor_valor:",
+/*10*/ "            menor_valor, menor_nome, menor_point = valor, nome, i",
+/*11*/ "    fila.pop(menor_point)",
+/*12*/ "    return menor_valor, menor_nome",
+/*13*/ "",
+/*14*/ "dist_from_origem = {no: inf para todo no do grafo}",
+/*15*/ "anterior   = {}",
+/*16*/ "visitados  = set()",
+/*17*/ "dist_from_origem[origem] = 0",
+/*18*/ "adicionar_na_fila(dist_from_origem[origem], origem)",
+/*19*/ "",
+/*20*/ "while fila:",
+/*21*/ "    distancia_atual, atual = get_menor_elemento_fila_and_remove()",
+/*22*/ "    if atual in visitados:",
+/*23*/ "        continue",
+/*24*/ "    visitados.add(atual)",
+/*25*/ "    if atual == destino:        # parada opcional: a distância do destino já é definitiva",
+/*26*/ "        break",
+/*27*/ "",
+/*28*/ "    for vizinho_nome, vizinho_peso in grafo[atual].items():",
+/*29*/ "        nova_distancia = distancia_atual + vizinho_peso",
+/*30*/ "        if nova_distancia < dist_from_origem[vizinho_nome]:",
+/*31*/ "            dist_from_origem[vizinho_nome] = nova_distancia",
+/*32*/ "            anterior[vizinho_nome] = atual",
+/*33*/ "            adicionar_na_fila(nova_distancia, vizinho_nome)",
+/*34*/ "",
+/*35*/ "# reconstrói o caminho: do destino até a origem, seguindo 'anterior'",
+/*36*/ "caminho = []",
+/*37*/ "atual = destino",
+/*38*/ "while atual != origem:",
+/*39*/ "    caminho.append(atual)",
+/*40*/ "    atual = anterior[atual]",
+/*41*/ "caminho.append(origem)",
+/*42*/ "caminho.reverse()",
+];
+
+/* ====================== estado ====================== */
+const state = {
+  mode:"add",
+  nodes:[],            // {name,x,y}
+  edges:[],            // {a,b,w}
+  origem:null, destino:null,
+  bg:null,
+  pending:null,        // nó aguardando ligação
+  run:null,            // {steps,i,playing,timer,distancia,caminho}
+  autoPeso:true,       // peso calculado pela distância na tela
+  pesoMax:100,         // peso de uma ligação que atravessa o tabuleiro "de ponta a ponta"
+  stepMs:1000,         // tempo de cada passo no modo lento (1s / 2s / 3s)
+  pararNoDestino:true, // encerra a busca assim que o destino sai da fila
+};
+
+const board = document.getElementById("board");
+const hintEl = document.getElementById("hint");
+let W = 800, H = 520, drag = null;
+
+/* ====================== helpers ====================== */
+const $ = s => document.querySelector(s);
+const getNode = n => state.nodes.find(x => x.name === n);
+const clamp = (v,a,b) => Math.max(a, Math.min(b, v));
+const ekey = (a,b) => a < b ? a+"|"+b : b+"|"+a;
+const esc = s => s.replace(/[&<>]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
+const infTxt = v => v === Infinity ? "∞" : v;
+
+function nextName(){
+  const used = new Set(state.nodes.map(n => n.name));
+  for(let i=0;;i++){
+    let s="", x=i;
+    do { s = String.fromCharCode(65 + (x%26)) + s; x = Math.floor(x/26) - 1; } while(x >= 0);
+    if(!used.has(s)) return s;
+  }
+}
+function fitViewBox(){
+  const r = board.getBoundingClientRect();
+  const nW = Math.max(50, r.width), nH = Math.max(50, r.height);
+  // reescala os pontos junto com o tabuleiro (o painel de preview cresce após carregar)
+  if(state.nodes.length && W && H){
+    const sx = nW / W, sy = nH / H;
+    if(Math.abs(sx - 1) > 0.001 || Math.abs(sy - 1) > 0.001)
+      state.nodes.forEach(n => { n.x = n.x * sx; n.y = n.y * sy; });
+  }
+  W = nW; H = nH;
+  board.setAttribute("viewBox", `0 0 ${W} ${H}`);
+  recalcPesosAuto();   // a "régua" (diagonal) mudou de tamanho junto com o tabuleiro
+}
+function ptFromEvent(e){
+  const r = board.getBoundingClientRect();
+  return { x: clamp(e.clientX - r.left, 0, W), y: clamp(e.clientY - r.top, 0, H) };
+}
+
+/* ====================== edição do grafo ====================== */
+function invalidateRun(){ if(state.run){ pause(); state.run = null; } }
+
+function addNode(x,y){
+  state.nodes.push({ name: nextName(), x, y });
+  invalidateRun(); updateAll();
+}
+function removeNode(name){
+  state.nodes = state.nodes.filter(n => n.name !== name);
+  state.edges = state.edges.filter(e => e.a !== name && e.b !== name);
+  if(state.origem === name) state.origem = null;
+  if(state.destino === name) state.destino = null;
+  if(state.pending === name) state.pending = null;
+  invalidateRun(); updateAll();
+}
+// "de ponta a ponta" = a diagonal do tabuleiro (a área toda disponível)
+function refLen(){ return Math.hypot(W, H); }
+
+// peso proporcional à distância entre os dois pontos na tela
+function pesoEntre(a,b){
+  const A = getNode(a), B = getNode(b);
+  if(!A || !B) return 1;
+  const d = Math.hypot(A.x - B.x, A.y - B.y);
+  return Math.max(1, Math.round(d / refLen() * state.pesoMax));
+}
+
+// recalcula o peso de TODAS as ligações a partir da posição atual dos pontos.
+// devolve true se algum peso mudou.
+function recalcPesosAuto(){
+  if(!state.autoPeso) return false;
+  let mudou = false;
+  for(const e of state.edges){
+    const w = pesoEntre(e.a, e.b);
+    if(w !== e.w){ e.w = w; mudou = true; }
+  }
+  return mudou;
+}
+
+function upsertEdge(a,b){
+  if(a === b) return;
+  const found = state.edges.find(e => ekey(e.a,e.b) === ekey(a,b));
+
+  if(state.autoPeso){
+    const w = pesoEntre(a,b);
+    if(found) found.w = w; else state.edges.push({ a, b, w });
+    invalidateRun(); updateAll();
+    return;
+  }
+
+  const atual = found ? String(found.w) : "1";
+  const raw = prompt(`Peso da ligação ${a} – ${b}:`, atual);
+  if(raw === null) return;
+  const w = Number(raw.replace(",", "."));
+  if(!isFinite(w) || w <= 0){ alert("Peso inválido: use um número maior que zero."); return; }
+  if(found) found.w = w;
+  else state.edges.push({ a, b, w });
+  invalidateRun(); updateAll();
+}
+function editEdgeWeight(a,b){
+  if(state.autoPeso){
+    flash('Peso automático pela distância. Desmarque "peso pela distância" para digitar o valor.');
+    return;
+  }
+  upsertEdge(a,b);
+}
+function removeEdge(a,b){
+  state.edges = state.edges.filter(e => ekey(e.a,e.b) !== ekey(a,b));
+  invalidateRun(); updateAll();
+}
+function buildGrafo(){
+  const g = {};
+  state.nodes.forEach(n => g[n.name] = {});
+  state.edges.forEach(e => { g[e.a][e.b] = e.w; g[e.b][e.a] = e.w; });
+  return g;
+}
+
+/* ====================== o algoritmo (porta do dijkstra_estudo.py) ====================== */
+function simulate(g, origem, destino){
+  const steps = [];
+  const dist = {}; Object.keys(g).forEach(k => dist[k] = Infinity);
+  const anterior = {};
+  const visitados = new Set();
+  let fila = [];
+  let parouCedo = false;
+  let nArestas = 0, nUpdates = 0;   // arestas analisadas / atualizações de distância
+  const add = (v,n) => fila.push([v,n]);
+
+  const push = (line, msg, extra={}) => steps.push(Object.assign({
+    line, msg,
+    fila: fila.map(x => x.slice()),
+    dist: Object.assign({}, dist),
+    anterior: Object.assign({}, anterior),
+    visitados: [...visitados],
+    arestas: nArestas, updates: nUpdates,
+    filaHighlight: null, aresta: null, atual: null, atualizado: null, relax: null, caminho: null, done: false,
+  }, extra));
+
+  push(14, "Inicializa a distância de todos os pontos como ∞ (infinito).");
+  dist[origem] = 0;
+  push(17, `Distância da origem "${origem}" até ela mesma = 0.`);
+  add(0, origem);
+  push(18, `Coloca (0, ${origem}) na fila de prioridade.`);
+
+  while(fila.length){
+    push(20, `A fila tem ${fila.length} elemento(s) → continua o laço.`);
+
+    let mi = 0;
+    for(let i=1;i<fila.length;i++) if(fila[i][0] < fila[mi][0]) mi = i;
+    push(21, `Retira o MENOR da fila: (${fila[mi][0]}, ${fila[mi][1]}).`, { filaHighlight: mi });
+    const distancia_atual = fila[mi][0], atual = fila[mi][1];
+    fila.splice(mi, 1);
+
+    if(visitados.has(atual)){
+      push(22, `"${atual}" já está em visitados.`, { atual });
+      push(23, `→ "continue": ignora e pega o próximo da fila.`, { atual });
+      continue;
+    }
+    push(22, `"${atual}" ainda não está em visitados.`, { atual });
+    visitados.add(atual);
+    push(24, `Marca "${atual}" como visitado — distância final dele = ${distancia_atual}.`, { atual });
+
+    if(state.pararNoDestino && atual === destino){
+      push(25, `"${atual}" é o DESTINO e acabou de sair da fila → a distância dele já é a menor possível. Não precisa continuar.`, { atual });
+      push(26, `"break": encerra o laço aqui.`, { atual });
+      parouCedo = true;
+      break;
+    }
+
+    const vizinhos = Object.keys(g[atual]);
+    push(28, `Vizinhos de "${atual}": ${vizinhos.join(", ") || "(nenhum)"}.`, { atual });
+
+    for(const viz of vizinhos){
+      const peso = g[atual][viz];
+      const cmp = infTxt(dist[viz]);
+      const soma = `${distancia_atual} + ${peso}`;
+      nArestas++;
+      push(28, `Aresta ${atual} – ${viz} (peso ${peso}).`, { atual, aresta:[atual,viz] });
+      const nova = distancia_atual + peso;
+      push(29, `nova_distancia = ${soma} = ${nova}.`,
+           { atual, aresta:[atual,viz], relax:{ alvo:viz, soma, nova, cmp, passou:null } });
+      if(nova < dist[viz]){
+        push(30, `${nova} < ${cmp} ? SIM → vale a pena atualizar.`,
+             { atual, aresta:[atual,viz], relax:{ alvo:viz, soma, nova, cmp, passou:true } });
+        dist[viz] = nova;
+        anterior[viz] = atual;
+        add(nova, viz);
+        nUpdates++;
+        push(33, `dist[${viz}] = ${nova}; anterior[${viz}] = ${atual}; e (${nova}, ${viz}) entra na fila.`,
+             { atual, aresta:[atual,viz], atualizado: viz, relax:{ alvo:viz, soma, nova, cmp, passou:true } });
+      } else {
+        push(30, `${nova} < ${cmp} ? NÃO → mantém a distância que já tinha.`,
+             { atual, aresta:[atual,viz], relax:{ alvo:viz, soma, nova, cmp, passou:false } });
+      }
+    }
+  }
+  if(!parouCedo) push(20, `A fila ficou vazia → a busca terminou.`);
+
+  if(dist[destino] === Infinity){
+    push(37, `Não existe caminho de "${origem}" até "${destino}".`, { caminho: [], done: true });
+    return { steps, distancia: null, caminho: [] };
+  }
+
+  let caminho = [destino], cur = destino, guard = 0;
+  push(37, `Reconstrução do caminho: começa no destino "${destino}".`, { caminho: caminho.slice() });
+  while(cur !== origem && guard++ < 9999){
+    const prev = anterior[cur];
+    push(40, `anterior[${cur}] = ${prev} → volta um passo para "${prev}".`, { caminho: caminho.slice() });
+    cur = prev; caminho.push(cur);
+  }
+  const final = caminho.slice().reverse();
+  push(42, `Caminho pronto: ${final.join(" → ")}   •   distância total = ${dist[destino]}.` +
+       (parouCedo ? "  (Paramos assim que o destino saiu da fila — outros nós podem não ter a distância final.)" : ""),
+       { caminho: final, done: true });
+
+  return { steps, distancia: dist[destino], caminho: final };
+}
+
+/* ====================== render do tabuleiro ====================== */
+function curStep(){ return state.run ? state.run.steps[state.run.i] : null; }
+
+function render(){
+  const step = curStep();
+  const pathPairs = new Set();
+  if(step && step.caminho && step.caminho.length > 1)
+    for(let i=0;i<step.caminho.length-1;i++) pathPairs.add(ekey(step.caminho[i], step.caminho[i+1]));
+  const activeEdge = step && step.aresta ? ekey(step.aresta[0], step.aresta[1]) : null;
+  const pathDone = step && step.done;
+
+  let s = `<defs><marker id="arw" viewBox="0 0 10 10" refX="8" refY="5"
+    markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+    <path d="M0,0 L10,5 L0,10 z" fill="#7c3aed"/></marker></defs>`;
+  if(state.bg)
+    s += `<image href="${state.bg}" x="0" y="0" width="${W}" height="${H}" preserveAspectRatio="xMidYMid meet"/>`;
+
+  // arestas
+  for(const e of state.edges){
+    const A = getNode(e.a), B = getNode(e.b); if(!A || !B) continue;
+    const k = ekey(e.a, e.b);
+    let cls = "edge";
+    if(pathPairs.has(k)) cls = pathDone ? "edge path" : "edge partial";
+    else if(activeEdge === k) cls = "edge active";
+    const mx = (A.x + B.x) / 2, my = (A.y + B.y) / 2;
+    s += `<g data-edge="${e.a}__${e.b}">`
+       + `<line class="${cls}" x1="${A.x}" y1="${A.y}" x2="${B.x}" y2="${B.y}"/>`
+       + `<line class="ehit"   x1="${A.x}" y1="${A.y}" x2="${B.x}" y2="${B.y}"/>`
+       + `<text class="wlabel" x="${mx}" y="${my}">${e.w}</text>`
+       + `</g>`;
+  }
+
+  // (1) setas do "anterior" — a árvore de caminhos mínimos que vai crescendo
+  if(step && $("#showTree").checked){
+    for(const [alvo, pai] of Object.entries(step.anterior)){
+      const P = getNode(pai), T = getNode(alvo); if(!P || !T) continue;
+      const dx = T.x - P.x, dy = T.y - P.y, len = Math.hypot(dx, dy) || 1;
+      // curva leve, deslocada da aresta reta, e parando antes do círculo do nó
+      const ox = -dy / len * 16, oy = dx / len * 16;
+      const cx = (P.x + T.x) / 2 + ox, cy = (P.y + T.y) / 2 + oy;
+      const ex = T.x - dx / len * 22, ey = T.y - dy / len * 22;
+      s += `<path class="tree" d="M ${P.x} ${P.y} Q ${cx} ${cy} ${ex} ${ey}" marker-end="url(#arw)"/>`;
+    }
+  }
+
+  // nós
+  for(const n of state.nodes){
+    const cl = ["node"];
+    const visitado = step && step.visitados.includes(n.name);
+    const atualNode = step && step.atual === n.name;
+    if(state.origem === n.name) cl.push("origem");
+    if(state.destino === n.name) cl.push("destino");
+    if(visitado) cl.push("visited");
+    if(atualNode) cl.push("current");
+    if(step && step.atualizado === n.name) cl.push("updated");
+    if(step && step.caminho && step.caminho.includes(n.name) && step.done) cl.push("path");
+    if(state.pending === n.name) cl.push("pending");
+    // (4) estados "não finalizados": tentativo (dist finita, ainda na fila) ou não alcançado
+    if(step && !visitado && !atualNode && !(step.done && cl.includes("path"))){
+      if(step.dist[n.name] === Infinity) cl.push("unreached");
+      else cl.push("tentative");
+    }
+
+    const d = step ? infTxt(step.dist[n.name]) : null;
+    s += `<g class="${cl.join(" ")}" data-node="${n.name}">`
+       + `<circle cx="${n.x}" cy="${n.y}" r="18"/>`
+       + `<text class="nm" x="${n.x}" y="${n.y}">${n.name}</text>`
+       + (d !== null ? `<text class="dlabel" x="${n.x}" y="${n.y - 30}">${d}</text>` : "")
+       + `</g>`;
+  }
+
+  // (6) balão do relaxamento: "9 + 3 = 12"  e depois  "12 < ∞ ✔"
+  if(step && step.relax && $("#showRelax").checked){
+    const r = step.relax, T = getNode(r.alvo);
+    if(T){
+      const txt = r.passou === null
+        ? `${r.soma} = ${r.nova}`
+        : `${r.nova} < ${r.cmp} ${r.passou ? "✔" : "✘"}`;
+      const w = txt.length * 7 + 14, h = 20;
+      const bx = clamp(T.x + 22, 2, W - w - 2);
+      // acima do nó, mas se não couber, embaixo
+      const by = clamp(T.y - 22 - h < 2 ? T.y + 22 : T.y - 22 - h, 2, H - h - 2);
+      const cls = r.passou === null ? "relax" : (r.passou ? "relax ok" : "relax no");
+      s += `<g class="${cls}"><rect x="${bx}" y="${by}" width="${w}" height="${h}" rx="6"/>`
+         + `<text x="${bx + 7}" y="${by + h / 2}">${esc(txt)}</text></g>`;
+    }
+  }
+
+  board.innerHTML = s;
+}
+
+/* ====================== render dos painéis ====================== */
+function renderSide(){
+  $("#oVal").textContent = state.origem || "—";
+  $("#dVal").textContent = state.destino || "—";
+
+  const step = curStep();
+  $("#msg").textContent = step ? step.msg : "";
+  $("#counter").textContent = state.run
+    ? `passo ${state.run.i + 1} de ${state.run.steps.length}` : "";
+
+  // (3) contadores de operações
+  const ct = $("#counters");
+  if(step){
+    ct.innerHTML = `visitados: <b>${step.visitados.length}</b> · `
+      + `arestas analisadas: <b>${step.arestas}</b> · `
+      + `atualizações: <b>${step.updates}</b>`;
+  } else ct.textContent = "";
+
+  // (5) fila SEMPRE exibida ordenada (menor no topo), sem perder o destaque do que sai
+  const fila = $("#fila");
+  if(!step){ fila.innerHTML = `<li class="empty">— rode o algoritmo —</li>`; }
+  else if(step.fila.length === 0){ fila.innerHTML = `<li class="empty">(fila vazia)</li>`; }
+  else {
+    fila.innerHTML = step.fila
+      .map((f, ix) => ({ f, ix }))
+      .sort((a, b) => a.f[0] - b.f[0] || a.ix - b.ix)
+      .map(({ f, ix }) => `<li class="${ix === step.filaHighlight ? "hl" : ""}">${f[0]} &middot; ${f[1]}</li>`)
+      .join("");
+  }
+
+  // (2) tabela dist + "veio de" (anterior) + ✓ (finalizado)
+  const dist = $("#dist");
+  const names = state.nodes.map(n => n.name).sort();
+  if(names.length === 0){ dist.innerHTML = `<tr><td style="color:var(--muted)">—</td></tr>`; }
+  else {
+    dist.innerHTML = `<tr><th>nó</th><th>dist</th><th>veio de</th><th>✓</th></tr>` + names.map(nm => {
+      const v  = step ? infTxt(step.dist[nm]) : (nm === state.origem ? 0 : "∞");
+      const de = step && step.anterior[nm] ? step.anterior[nm] : "–";
+      const ok = step && step.visitados.includes(nm) ? "✓" : "";
+      const rc = [];
+      if(step && step.atual === nm) rc.push("cur");
+      if(state.origem === nm) rc.push("o");
+      if(state.destino === nm) rc.push("d");
+      return `<tr class="${rc.join(" ")}"><td>${nm}</td><td>${v}</td><td>${de}</td><td>${ok}</td></tr>`;
+    }).join("");
+  }
+
+  // resultado
+  const res = $("#result");
+  if(state.run && step && step.done){
+    if(state.run.distancia === null)
+      res.innerHTML = `<span class="no">Sem caminho</span> entre ${state.origem} e ${state.destino}.`;
+    else
+      res.innerHTML = `<span class="ok">Menor distância: ${state.run.distancia}</span><br>`
+        + `Caminho: ${state.run.caminho.join(" → ")}`;
+  } else if(!state.run){
+    res.innerHTML = `Defina origem e destino e clique em <b>Rodar</b>.`;
+  } else {
+    res.textContent = "Processando…";
+  }
+}
+
+let codeReady = false;
+function renderCode(){
+  const pre = $("#code");
+  if(!codeReady){
+    pre.innerHTML = CODE.map((ln,i) =>
+      `<span class="cl" data-l="${i+1}"><span class="ln">${i+1}</span>${esc(ln) || " "}</span>`).join("\n");
+    codeReady = true;
+  }
+  pre.querySelectorAll(".cl.hot").forEach(el => el.classList.remove("hot"));
+  const step = curStep();
+  if(step){
+    const el = pre.querySelector(`.cl[data-l="${step.line}"]`);
+    if(el){
+      el.classList.add("hot");
+      // rola só dentro do painel de código — nunca a página inteira
+      const pr = pre.getBoundingClientRect(), er = el.getBoundingClientRect();
+      pre.scrollTop += (er.top - pr.top) - (pre.clientHeight - er.height) / 2;
+    }
+  }
+}
+
+// mantém os botões 1s/2s/3s e o campo de ms coerentes com state.stepMs,
+// e TRAVA esses controles enquanto existe uma execução (só liberam no "Reiniciar")
+function syncSpeedUI(){
+  const locked = !!state.run;
+  const ms = $("#msInput");
+  if(document.activeElement !== ms) ms.value = state.stepMs;
+  ms.disabled = locked;
+  document.querySelectorAll("#speeds button").forEach(b => {
+    b.classList.toggle("on", Number(b.dataset.ms) === state.stepMs);
+    b.disabled = locked;
+  });
+}
+
+function renderControls(){
+  document.querySelectorAll("#modes button").forEach(b =>
+    b.classList.toggle("on", b.dataset.mode === state.mode));
+  syncSpeedUI();
+  const playing = !!(state.run && state.run.playing);
+  const play = $("#play");
+  play.textContent = playing ? "⏸ Pausar" : "▶ Rodar";
+  play.classList.toggle("pause", playing);
+  const noRun = !state.run;
+  $("#back").disabled = noRun || state.run.i === 0;
+  $("#fwd").disabled  = state.run && state.run.i >= state.run.steps.length - 1;
+  $("#end").disabled  = state.run && state.run.i >= state.run.steps.length - 1;
+  $("#reset").disabled = noRun;
+
+  const H = {
+    add:"Clique num espaço vazio para criar um ponto.",
+    move:"Arraste os pontos para posicioná-los sobre a imagem." +
+         (state.autoPeso ? " O peso das ligações se ajusta sozinho à nova distância." : ""),
+    link: state.autoPeso
+      ? `Clique em dois pontos para ligá-los. O peso vem da distância na tela (ponta a ponta = ${state.pesoMax}).`
+      : "Clique em dois pontos para ligá-los (vai pedir o peso). Clique no peso para editar.",
+    origem:"Clique no ponto que será a ORIGEM.",
+    destino:"Clique no ponto que será o DESTINO.",
+    erase:"Clique num ponto ou numa ligação para apagar.",
+  };
+  hintEl.textContent = state.pending
+    ? `Ligar: agora clique no segundo ponto (origem da ligação: ${state.pending}).`
+    : (H[state.mode] || "");
+}
+
+function updateAll(){ render(); renderSide(); renderCode(); renderControls(); }
+
+/* ====================== playback ====================== */
+function speed(){ return state.stepMs; }
+
+function startRun(){
+  if(state.nodes.length < 2){ flash("Crie pelo menos dois pontos."); return false; }
+  if(!state.origem || !state.destino){ flash("Defina a origem e o destino (modos 🅐 e 🅕)."); return false; }
+  if(state.edges.length === 0){ flash("Ligue os pontos primeiro (modo 🔗)."); return false; }
+  const r = simulate(buildGrafo(), state.origem, state.destino);
+  state.run = { steps: r.steps, i: 0, playing: false, timer: null,
+                distancia: r.distancia, caminho: r.caminho };
+  updateAll();
+  return true;
+}
+function flash(m){ $("#msg").textContent = m; }
+
+function tick(){
+  if(!state.run || !state.run.playing) return;
+  if(state.run.i >= state.run.steps.length - 1){ state.run.playing = false; updateControlsSoft(); return; }
+  state.run.i++; updateAll();
+  state.run.timer = setTimeout(tick, speed());
+}
+function play(){
+  if(!state.run && !startRun()) return;
+  if(state.run.i >= state.run.steps.length - 1) state.run.i = 0;
+  state.run.playing = true; updateControlsSoft(); tick();
+}
+function pause(){
+  if(state.run){ state.run.playing = false; clearTimeout(state.run.timer); }
+  updateControlsSoft();
+}
+function updateControlsSoft(){ renderControls(); }
+function stepFwd(){
+  if(!state.run && !startRun()) return;
+  pause();
+  if(state.run.i < state.run.steps.length - 1){ state.run.i++; updateAll(); }
+}
+function stepBack(){
+  if(!state.run) return;
+  pause();
+  if(state.run.i > 0){ state.run.i--; updateAll(); }
+}
+function toEnd(){
+  if(!state.run && !startRun()) return;
+  pause();
+  state.run.i = state.run.steps.length - 1; updateAll();
+}
+function resetRun(){ pause(); state.run = null; updateAll(); }
+
+/* ====================== eventos do tabuleiro ====================== */
+board.addEventListener("pointerdown", e => {
+  const nodeEl = e.target.closest("[data-node]");
+  if(nodeEl){ onNodeDown(nodeEl.getAttribute("data-node"), e); return; }
+  const edgeEl = e.target.closest("[data-edge]");
+  if(edgeEl){
+    const [a,b] = edgeEl.getAttribute("data-edge").split("__");
+    if(state.mode === "erase") removeEdge(a,b);
+    else editEdgeWeight(a,b);
+    return;
+  }
+  if(state.mode === "add"){ const p = ptFromEvent(e); addNode(p.x, p.y); }
+});
+
+function onNodeDown(name, e){
+  switch(state.mode){
+    case "move": {
+      const n = getNode(name), p = ptFromEvent(e);
+      drag = { name, ox: p.x - n.x, oy: p.y - n.y };
+      board.setPointerCapture(e.pointerId);
+      break;
+    }
+    case "link":
+      if(!state.pending) state.pending = name;
+      else { const a = state.pending; state.pending = null; upsertEdge(a, name); }
+      updateAll();
+      break;
+    case "origem":  state.origem  = name; invalidateRun(); updateAll(); break;
+    case "destino": state.destino = name; invalidateRun(); updateAll(); break;
+    case "erase":   removeNode(name); break;
+    case "add":     state.mode = "move"; onNodeDown(name, e); renderControls(); break;
+  }
+}
+board.addEventListener("pointermove", e => {
+  if(!drag) return;
+  const n = getNode(drag.name), p = ptFromEvent(e);
+  n.x = clamp(p.x - drag.ox, 20, W - 20);
+  n.y = clamp(p.y - drag.oy, 20, H - 20);
+  if(recalcPesosAuto()){ invalidateRun(); updateAll(); }  // arrastar muda a distância → muda o peso
+  else render();
+});
+board.addEventListener("pointerup",   () => { drag = null; });
+board.addEventListener("pointercancel", () => { drag = null; });
+
+/* ====================== eventos da toolbar ====================== */
+document.querySelectorAll("#modes button").forEach(b =>
+  b.addEventListener("click", () => {
+    state.mode = b.dataset.mode;
+    if(state.mode !== "link") state.pending = null;
+    updateAll();
+  }));
+
+// níveis prontos (1s / 2s / 3s) — só antes de rodar
+document.querySelectorAll("#speeds button").forEach(b =>
+  b.addEventListener("click", () => {
+    if(state.run) return;
+    state.stepMs = Number(b.dataset.ms);
+    syncSpeedUI();
+  }));
+
+// velocidade manual em ms — digita o que quiser antes de rodar; trava ao rodar
+$("#msInput").addEventListener("input", e => {
+  if(state.run) return;
+  const v = Math.floor(Number(e.target.value));
+  if(isFinite(v) && v >= 1){
+    state.stepMs = v;
+    document.querySelectorAll("#speeds button").forEach(x =>
+      x.classList.toggle("on", Number(x.dataset.ms) === v));
+  }
+});
+$("#msInput").addEventListener("blur", () => { $("#msInput").value = state.stepMs; });
+
+$("#play").addEventListener("click", () => (state.run && state.run.playing) ? pause() : play());
+$("#fwd").addEventListener("click", stepFwd);
+$("#back").addEventListener("click", stepBack);
+$("#end").addEventListener("click", toEnd);
+$("#reset").addEventListener("click", resetRun);
+
+/* ====================== salvar / carregar configuração ====================== */
+const CFG_KEY = "dijkstra_visual__configs";
+
+function clampInt(v, min, max, def){
+  v = Math.floor(Number(v));
+  return isFinite(v) ? Math.max(min, Math.min(max, v)) : def;
+}
+function loadStore(){
+  try { return JSON.parse(localStorage.getItem(CFG_KEY)) || {}; }
+  catch(e){ return {}; }
+}
+function saveStore(obj){ localStorage.setItem(CFG_KEY, JSON.stringify(obj)); }
+
+// serializa o estado atual. Posições dos pontos vão como fração de W/H,
+// então a configuração funciona em qualquer tamanho de tela.
+function serializeConfig(){
+  return {
+    v: 1,
+    nodes: state.nodes.map(n => ({ name: n.name, nx: n.x / W, ny: n.y / H })),
+    edges: state.edges.map(e => ({ a: e.a, b: e.b, w: e.w })),
+    origem: state.origem, destino: state.destino,
+    autoPeso: state.autoPeso, pesoMax: state.pesoMax, stepMs: state.stepMs,
+    pararNoDestino: state.pararNoDestino,
+    bg: state.bg || null, bgW: state.bgW || null, bgH: state.bgH || null,
+  };
+}
+function placeNodes(cfg){
+  state.nodes = (cfg.nodes || []).map(n => ({
+    name: n.name,
+    x: n.nx != null ? n.nx * W : (n.x || W / 2),
+    y: n.ny != null ? n.ny * H : (n.y || H / 2),
+  }));
+}
+function applyConfig(cfg){
+  if(!cfg || typeof cfg !== "object" || !Array.isArray(cfg.nodes)){
+    alert("Configuração inválida."); return;
+  }
+  pause(); state.run = null;
+  state.autoPeso = cfg.autoPeso !== false;
+  state.pararNoDestino = cfg.pararNoDestino !== false;
+  state.pesoMax  = clampInt(cfg.pesoMax, 1, 1000000, 100);
+  state.stepMs   = clampInt(cfg.stepMs, 1, 600000, 1000);
+  state.origem   = cfg.origem || null;
+  state.destino  = cfg.destino || null;
+  state.pending  = null;
+  state.bg  = cfg.bg || null;
+  state.bgW = cfg.bgW || null;
+  state.bgH = cfg.bgH || null;
+  state.edges = (cfg.edges || []).map(e => ({ a: e.a, b: e.b, w: Number(e.w) || 1 }));
+  state.nodes = [];
+  $("#autoPeso").checked = state.autoPeso;
+  $("#pararDestino").checked = state.pararNoDestino;
+  $("#pesoMax").value = state.pesoMax;
+
+  const finish = () => {
+    applyBoardSize();          // ajusta a altura do tabuleiro à imagem e roda fitViewBox
+    placeNodes(cfg);           // posiciona os pontos já com o W/H final
+    recalcPesosAuto();
+    updateAll();
+  };
+  if(state.bg && (!state.bgW || !state.bgH)){
+    const img = new Image();
+    img.onload  = () => { state.bgW = img.naturalWidth; state.bgH = img.naturalHeight; finish(); };
+    img.onerror = finish;
+    img.src = state.bg;
+  } else finish();
+}
+
+function refreshCfgList(sel){
+  const store = loadStore();
+  const names = Object.keys(store).sort((a,b) => a.localeCompare(b, "pt"));
+  $("#cfgList").innerHTML = `<option value="">— salvas —</option>` +
+    names.map(n => `<option value="${esc(n)}"${n === sel ? " selected" : ""}>${esc(n)}</option>`).join("");
+}
+
+$("#cfgSave").addEventListener("click", () => {
+  const store = loadStore();
+  const nome = (prompt("Nome desta configuração:", "config " + (Object.keys(store).length + 1)) || "").trim();
+  if(!nome) return;
+  if(store[nome] && !confirm(`Já existe "${nome}". Substituir?`)) return;
+  const cfg = serializeConfig();
+  store[nome] = cfg;
+  try {
+    saveStore(store);
+    flash(`Configuração "${nome}" salva.`);
+  } catch(err){
+    // provavelmente estourou a cota do navegador por causa da imagem de fundo
+    const semImg = Object.assign({}, cfg, { bg: null, bgW: null, bgH: null });
+    store[nome] = semImg;
+    try {
+      saveStore(store);
+      flash(`"${nome}" salva SEM a imagem de fundo (grande demais para o navegador). Use "Exportar" para guardar com a imagem.`);
+    } catch(e2){
+      alert("Não foi possível salvar: armazenamento do navegador cheio.");
+      return;
+    }
+  }
+  refreshCfgList(nome);
+});
+
+$("#cfgLoad").addEventListener("click", () => {
+  const nome = $("#cfgList").value;
+  if(!nome){ flash("Escolha uma configuração salva na lista."); return; }
+  const store = loadStore();
+  if(!store[nome]){ flash("Configuração não encontrada."); refreshCfgList(); return; }
+  applyConfig(store[nome]);
+  flash(`Configuração "${nome}" carregada.`);
+});
+
+$("#cfgDel").addEventListener("click", () => {
+  const nome = $("#cfgList").value;
+  if(!nome){ flash("Escolha uma configuração para excluir."); return; }
+  if(!confirm(`Excluir a configuração "${nome}"?`)) return;
+  const store = loadStore();
+  delete store[nome];
+  saveStore(store);
+  refreshCfgList();
+  flash(`Configuração "${nome}" excluída.`);
+});
+
+$("#cfgExport").addEventListener("click", () => {
+  const blob = new Blob([JSON.stringify(serializeConfig(), null, 2)], { type: "application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "dijkstra-config.json";
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+});
+
+$("#cfgImport").addEventListener("change", e => {
+  const f = e.target.files[0]; if(!f) return;
+  const rd = new FileReader();
+  rd.onload = () => {
+    try { applyConfig(JSON.parse(rd.result)); flash(`Configuração importada de "${f.name}".`); }
+    catch(err){ alert("Arquivo inválido: não é um JSON de configuração."); }
+  };
+  rd.readAsText(f);
+  e.target.value = "";
+});
+
+// Ajusta a ALTURA do tabuleiro para bater com a proporção da imagem,
+// assim ela aparece inteira — sem cortar e sem barras nas laterais.
+function applyBoardSize(){
+  if(state.bg && state.bgW && state.bgH){
+    const w = board.getBoundingClientRect().width;
+    const maxH = Math.min(900, Math.max(260, window.innerHeight * 0.82));
+    const h = Math.min(maxH, w * state.bgH / state.bgW);
+    board.style.height = h + "px";
+  } else {
+    board.style.height = "";   // volta para a altura padrão do CSS
+  }
+  fitViewBox();
+  render();
+}
+
+$("#bgFile").addEventListener("change", e => {
+  const f = e.target.files[0]; if(!f) return;
+  const rd = new FileReader();
+  rd.onload = () => {
+    const img = new Image();
+    img.onload = () => {
+      state.bg = rd.result;
+      state.bgW = img.naturalWidth;
+      state.bgH = img.naturalHeight;
+      applyBoardSize();
+    };
+    img.src = rd.result;
+  };
+  rd.readAsDataURL(f);
+  e.target.value = "";
+});
+$("#bgClear").addEventListener("click", () => {
+  state.bg = state.bgW = state.bgH = null;
+  applyBoardSize();
+});
+
+$("#autoPeso").addEventListener("change", e => {
+  state.autoPeso = e.target.checked;
+  recalcPesosAuto();
+  invalidateRun(); updateAll();
+});
+$("#pararDestino").addEventListener("change", e => {
+  state.pararNoDestino = e.target.checked;
+  invalidateRun(); updateAll();
+});
+$("#showTree").addEventListener("change", render);
+$("#showRelax").addEventListener("change", render);
+$("#pesoMax").addEventListener("input", e => {
+  const v = Math.max(1, Math.round(Number(e.target.value) || 0));
+  state.pesoMax = v;
+  if(recalcPesosAuto()) invalidateRun();
+  updateAll();
+});
+$("#pesoMax").addEventListener("blur", e => { e.target.value = state.pesoMax; });
+
+$("#clearAll").addEventListener("click", () => {
+  if(!confirm("Apagar todos os pontos e ligações?")) return;
+  state.nodes = []; state.edges = []; state.origem = state.destino = state.pending = null;
+  resetRun();
+});
+$("#example").addEventListener("click", loadExample);
+
+document.addEventListener("keydown", e => {
+  if(/INPUT|TEXTAREA/.test(document.activeElement.tagName)) return;
+  if(e.key === " "){ e.preventDefault(); (state.run && state.run.playing) ? pause() : play(); }
+  else if(e.key === "ArrowRight") stepFwd();
+  else if(e.key === "ArrowLeft")  stepBack();
+});
+
+window.addEventListener("resize", () => { applyBoardSize(); });
+if(window.ResizeObserver) new ResizeObserver(() => { fitViewBox(); render(); }).observe(board);
+
+/* ====================== exemplo (mesmo grafo do dijkstra_estudo.py) ====================== */
+function loadExample(){
+  const nx = [
+    ["A",0.16,0.18],["B",0.42,0.18],["G",0.72,0.18],
+    ["D",0.42,0.52],["E",0.72,0.52],
+    ["C",0.22,0.85],["F",0.72,0.85],
+  ];
+  state.nodes = nx.map(([name,fx,fy]) => ({ name, x: fx*W, y: fy*H }));
+  // pesos "canônicos" do dijkstra_estudo.py — usados quando "peso pela distância" está DESMARCADO
+  state.edges = [
+    ["A","B",3],["B","G",3],["B","D",2],["C","D",2],
+    ["C","F",10],["D","E",5],["E","G",3],["E","F",3],
+  ].map(([a,b,w]) => ({ a, b, w }));
+  state.origem = "A"; state.destino = "F"; state.pending = null;
+  recalcPesosAuto();   // se "peso pela distância" estiver marcado, deriva tudo da posição
+  resetRun();
+}
+
+/* ====================== start ====================== */
+fitViewBox();
+loadExample();
+refreshCfgList();
+// o painel de preview às vezes só assume o tamanho final depois do load:
+// o ResizeObserver acima reescala os pontos junto com o tabuleiro.
+window.addEventListener("load", () => { fitViewBox(); render(); });
+</script>
