@@ -1,11 +1,13 @@
 # Cria uma fila de prioridade para armazenar os vertices a serem visitados
 fila = []
 
+# Adiciona um vértice e sua distância atual à fila manual.
 def adicionar_na_fila(valor, nome):
     fila.append((valor, nome))
 
 
 def get_menor_elemento_fila_and_remove():
+    # Localiza e remove o item de menor distância da fila.
     if not fila:
         return
 
@@ -61,6 +63,7 @@ dist_from_origem[origem] = 0
 adicionar_na_fila(dist_from_origem[origem], origem)
 
 while fila:
+    # Processa sempre o vértice ainda não visitado com menor distância conhecida.
     elemento_mais_perto = get_menor_elemento_fila_and_remove()
     distancia_atual = elemento_mais_perto[0]
     atual = elemento_mais_perto[1]
@@ -71,14 +74,13 @@ while fila:
         visitados.add(atual)
 
     for vizinho in grafo[atual].items():    
+        # Testa se passar pelo vértice atual produz uma rota melhor para o vizinho.
         vizinho_nome = vizinho[0]
         vizinho_peso = vizinho[1]
 
         # nova distancia = Distancia percorrida da origem até (Atual) +
         # Distancia do (Atual) até o Vizinho que está sendo iterado
         nova_distancia = distancia_atual + vizinho_peso
-
-        # se a distancia da origem até aqui, for menor, que a distancia da origem salva no 
 
         if nova_distancia  < dist_from_origem[vizinho_nome]:
 
@@ -94,6 +96,7 @@ while fila:
 # print(dist_from_origem)
 # print(anterior)
 
+# Reconstrói a rota seguindo os predecessores do destino até a origem.
 caminho = []
 atual = destino
 
@@ -104,6 +107,7 @@ while atual != origem:
 if atual == origem:
     caminho.append(atual)
 
+# Inverte a sequência para apresentá-la da origem ao destino.
 size_caminho = len(caminho)
 caminho_correto = []
 

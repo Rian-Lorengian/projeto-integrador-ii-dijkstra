@@ -38,14 +38,14 @@ def dijkstra(grafo, origem, destino, verbose=True):
     Retorna: (distancia_total, caminho como lista de nós)
     """
 
-    # Inicializa todas as distâncias como infinito, exceto a origem
+    # Inicializa as distâncias e define a origem como ponto de partida.
     distancias = {no: float('inf') for no in grafo}
     distancias[origem] = 0
 
-    # Guarda de onde viemos, para reconstruir o caminho no final
+    # Guarda o predecessor de cada nó para reconstruir o caminho no final.
     anterior = {no: None for no in grafo}
 
-    # Fila de prioridade (min-heap): (distancia_atual, no)
+    # A fila sempre entrega primeiro o nó com menor distância acumulada.
     fila = [(0, origem)]
     visitados = set()
 
@@ -53,6 +53,7 @@ def dijkstra(grafo, origem, destino, verbose=True):
         print(f"\n=== Iniciando Dijkstra de '{origem}' até '{destino}' ===\n")
 
     while fila:
+        # Retira a próxima melhor alternativa da fila de prioridade.
         dist_atual, no_atual = heapq.heappop(fila)
 
         if no_atual in visitados:
@@ -68,7 +69,7 @@ def dijkstra(grafo, origem, destino, verbose=True):
                 print(f"Chegamos ao destino '{destino}'! Parando busca.\n")
             break
 
-        # Analisa os vizinhos do nó atual
+        # Relaxa as arestas: atualiza vizinhos quando encontra uma rota menor.
         for vizinho, peso in grafo[no_atual].items():
             if vizinho in visitados:
                 continue
@@ -82,7 +83,7 @@ def dijkstra(grafo, origem, destino, verbose=True):
                 if verbose:
                     print(f"    -> Atualizando '{vizinho}': nova menor distância = {nova_distancia}")
 
-    # Reconstrói o caminho percorrendo o dicionário 'anterior' de trás pra frente
+    # Reconstrói o caminho do destino até a origem usando os predecessores.
     caminho = []
     no = destino
     while no is not None:
@@ -156,6 +157,7 @@ def desenhar_grafo(grafo, caminho=None, nome_arquivo="grafo_dijkstra.png"):
 
 
 def imprimir_resultado(distancia, caminho):
+    # Apresenta uma mensagem específica quando a busca não encontrou rota.
     if distancia is None:
         print("Não existe caminho entre os pontos escolhidos.")
         return
@@ -172,6 +174,7 @@ def escolher_ponto(grafo, texto):
     """
     pontos = list(grafo.keys())
     while True:
+        # Valida a entrada até que o usuário informe um ponto existente.
         escolha = input(texto).strip()
 
         # Permite digitar pelo número da lista
@@ -213,7 +216,7 @@ if __name__ == "__main__":
         'Bar': {'Mercado': 4, 'Bairro Norte': 3},
     }
 
-    # -------- Entrada interativa: usuário escolhe origem e destino --------
+    # Lista os pontos e coleta a origem e o destino escolhidos pelo usuário.
     print("\nPontos disponíveis:")
     for i, ponto in enumerate(grafo_cidade.keys(), start=1):
         print(f"  {i}. {ponto}")
@@ -222,10 +225,11 @@ if __name__ == "__main__":
     origem = escolher_ponto(grafo_cidade, "\nDigite a ORIGEM: ")
     destino = escolher_ponto(grafo_cidade, "Digite o DESTINO: ")
 
+    # Executa a busca e imprime o resultado detalhado para a apresentação.
     distancia, caminho = dijkstra(grafo_cidade, origem, destino, verbose=True)
     imprimir_resultado(distancia, caminho)
 
-    # Gera duas imagens: o grafo "cru" e o grafo com o menor caminho destacado
+    # Gera uma imagem do grafo e outra com o menor caminho destacado.
     desenhar_grafo(grafo_cidade, caminho=None, nome_arquivo="grafo_cidade.png")
     if caminho:
         desenhar_grafo(grafo_cidade, caminho=caminho,
