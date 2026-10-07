@@ -22,7 +22,7 @@ def get_menor_elemento_fila_and_remove():
             menor_nome = nome
             menor_point = point
         
-        point =+ 1
+        point += 1
 
     fila.pop(menor_point)
 
